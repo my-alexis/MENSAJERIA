@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "bullmq": "^5.68.0",
+    "express": "^5.2.1",
+    "git": "^0.1.5",
+    "ioredis": "^5.9.2",
+    "multer": "^2.0.2",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "socket.io": "^4.8.3",
+    "whatsapp-web.js": "^1.23.1-alpha.5"
+  }
+}

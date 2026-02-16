@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Masivos IT - New Horizons</title>
+    <style>
+        /* --- MANTENEMOS TU CSS ORIGINAL --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: #f5f7fa; min-height: 100vh; }
+        .top-header { background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); color: white; padding: 20px 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .top-header h1 { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; }
+        .top-header p { font-size: 13px; opacity: 0.9; margin-top: 4px; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 30px; display: flex; gap: 30px; align-items: flex-start; }
+        #form-section { flex: 1; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 40px; }
+        .section-title { font-size: 20px; font-weight: 700; color: #1a237e; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 3px solid #1565c0; }
+        .form-group { margin-bottom: 25px; }
+        label { font-weight: 600; display: block; margin-bottom: 8px; color: #37474f; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+        textarea, input[type="text"], select { width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 8px; font-family: inherit; font-size: 14px; transition: all 0.3s; background: #fafafa; }
+        textarea:focus, select:focus { outline: none; border-color: #1565c0; background: white; }
+        button { background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); color: white; border: none; padding: 18px; width: 100%; cursor: pointer; font-weight: 600; border-radius: 8px; font-size: 15px; transition: all 0.3s; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(13, 71, 161, 0.3); margin-top: 10px; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(13, 71, 161, 0.4); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        
+        #preview-section { width: 420px; position: sticky; top: 30px; }
+        .preview-card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; }
+        .preview-header { background: linear-gradient(135deg, #263238 0%, #37474f 100%); color: white; padding: 20px; text-align: center; }
+        .phone-mockup { padding: 30px; background: #eceff1; }
+        .phone-screen { background: #e5ddd5; border-radius: 20px; padding: 20px; min-height: 450px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+        .chat-header { background: #075e54; padding: 12px; border-radius: 10px 10px 0 0; margin: -20px -20px 15px -20px; color: white; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .bubble { background: #dcf8c6; padding: 12px 16px; border-radius: 8px; position: relative; margin-left: auto; max-width: 85%; }
+        
+        #qr-container { display: none; text-align: center; border: 2px dashed #1565c0; border-radius: 8px; padding: 15px; margin-bottom: 20px; background: #f8faff; }
+        #qr-canvas { max-width: 180px; margin: 10px auto; }
+
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
+        .status-offline { background: #ffebee; color: #c62828; }
+        .status-online { background: #e8f5e9; color: #2e7d32; }
+    </style>
+</head>
+<body>
+
+    <div class="top-header">
+        <h1>NEW HORIZONS - Sistema de Mensajería Masiva</h1>
+        <p>Panel de Administración IT | Envío por Lotes Multi-Asesor</p>
+    </div>
+
+    <div class="container">
+        <div id="form-section">
+            <h2 class="section-title">Configuración de Envío</h2>
+            
+            <div class="form-group">
+                <label>Seleccionar Asesor Académico</label>
+                <div id="status-indicador" class="status-badge status-offline">Estado: Desconectado</div>
+                <select id="idAsesor" onchange="conectarAsesor()">
+                    <option value="">-- Elija quién envía --</option>
+                    <option value="Asesor_Ventas1">Ventas 01</option>
+                    <option value="Asesor_Ventas2">Ventas 02</option>
+                </select>
+            </div>
+
+            <div id="qr-container">
+                <p style="font-size: 13px; font-weight: bold; color: #0d47a1;">Vincular WhatsApp:</p>
+                <canvas id="qr-canvas"></canvas>
+                <p style="font-size: 11px; color: #546e7a;">Escanee el código para activar esta instancia.</p>
+            </div>
+
+            <form id="envioForm">
+                <div class="form-group">
+                    <label>Lista de Destinatarios (un número por línea)</label>
+                    <textarea id="nums" rows="6" placeholder="51987654321&#10;51912345678"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Mensaje de Difusión</label>
+                    <textarea id="msg" rows="4" oninput="sync()" placeholder="Escriba aquí el mensaje..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Archivo Adjunto (Opcional)</label>
+                    <input type="file" id="archivo" hidden onchange="handleFileSelect(event)">
+                    <div id="fileLabel" class="file-upload-label" onclick="document.getElementById('archivo').click()" style="cursor:pointer; border: 2px dashed #ccc; padding: 15px; text-align: center; border-radius: 8px;">
+                        <span id="fileLabelText">📎 Seleccionar archivo</span>
+                    </div>
+                </div>
+                
+                <button type="button" id="btnEnviar" onclick="enviar()">Iniciar Proceso de Envío</button>
+            </form>
+
+            <div id="status-box" style="display:none; margin-top:20px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+                <p id="estado-label" style="font-weight: bold; color: #0d47a1;">🚀 Envío programado correctamente.</p>
+                <p style="font-size: 13px; margin-top: 5px;">El servidor procesará <span id="count-total">0</span> mensajes en segundo plano. Puedes cerrar esta ventana o cambiar de asesor.</p>
+            </div>
+        </div>
+
+        <div id="preview-section">
+            <div class="preview-card">
+                <div class="preview-header"><h3>Vista Previa</h3></div>
+                <div class="phone-mockup">
+                    <div class="phone-screen">
+                        <div class="chat-header">Destinatario</div>
+                        <div class="bubble">
+                            <div id="file-preview" style="display:none; font-size: 12px; margin-bottom: 5px; color: #555; border-bottom: 1px solid #ccc; padding-bottom: 5px;">📎 Archivo adjunto</div>
+                            <div id="txt-v" class="bubble-text" style="white-space: pre-wrap;">Mensaje...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script>
+        const socket = io();
+        let asesorActual = "";
+        let selectedFile = null;
+
+        // --- MANEJO DE SESIONES ---
+
+        function conectarAsesor() {
+            asesorActual = document.getElementById('idAsesor').value;
+            const indicador = document.getElementById('status-indicador');
+            
+            if (!asesorActual) {
+                indicador.className = "status-badge status-offline";
+                indicador.innerText = "Estado: Desconectado";
+                return;
+            }
+
+            document.getElementById('qr-container').style.display = 'none';
+            indicador.className = "status-badge status-offline";
+            indicador.innerText = "Estado: Conectando...";
+            
+            socket.emit('iniciar-instancia', { idAsesor: asesorActual });
+        }
+
+        socket.on('qr', (data) => {
+            if (data.idAsesor === asesorActual) {
+                document.getElementById('qr-container').style.display = 'block';
+                QRCode.toCanvas(document.getElementById('qr-canvas'), data.qr);
+            }
+        });
+
+        socket.on('ready', (data) => {
+            if (data.idAsesor === asesorActual) {
+                document.getElementById('qr-container').style.display = 'none';
+                const indicador = document.getElementById('status-indicador');
+                indicador.className = "status-badge status-online";
+                indicador.innerText = "Estado: En Línea";
+            }
+        });
+
+        // --- FUNCIONES DE INTERFAZ ---
+
+        function handleFileSelect(e) {
+            selectedFile = e.target.files[0];
+            if (selectedFile) {
+                document.getElementById('fileLabelText').innerText = "✅ " + selectedFile.name;
+                document.getElementById('file-preview').style.display = 'block';
+            }
+        }
+
+        function sync() {
+            document.getElementById('txt-v').innerText = document.getElementById('msg').value || "Mensaje...";
+        }
+
+        // --- ENVÍO MASIVO ---
+
+        async function enviar() {
+            const btn = document.getElementById('btnEnviar');
+            const numsRaw = document.getElementById('nums').value.split('\n').filter(n => n.trim());
+            const mensaje = document.getElementById('msg').value;
+
+            if (!asesorActual) return alert("❌ Seleccione un asesor primero.");
+            if (numsRaw.length === 0 || !mensaje) return alert("❌ Por favor, ingrese números y un mensaje.");
+
+            const formData = new FormData();
+            formData.append('idAsesor', asesorActual);
+            formData.append('numeros', JSON.stringify(numsRaw));
+            formData.append('mensaje', mensaje);
+            if (selectedFile) formData.append('archivo', selectedFile);
+
+            btn.disabled = true;
+            btn.innerText = "PROCESANDO...";
+
+            try {
+                // Como usamos Basic Auth, el navegador pedirá login la primera vez
+                // y luego recordará las credenciales para este fetch automáticamente.
+                const res = await fetch('/enviar-masivo', { 
+                    method: 'POST', 
+                    body: formData 
+                });
+
+                const result = await res.json();
+
+                if (result.success) {
+                    document.getElementById('status-box').style.display = 'block';
+                    document.getElementById('count-total').innerText = result.total;
+                    alert("✅ ¡Campaña iniciada! Los mensajes se enviarán uno a uno cada 10 segundos.");
+                    
+                    // Limpiamos el formulario para evitar doble envío accidental
+                    document.getElementById('nums').value = "";
+                    document.getElementById('msg').value = "";
+                    selectedFile = null;
+                    document.getElementById('fileLabelText').innerText = "📎 Seleccionar archivo";
+                    document.getElementById('file-preview').style.display = 'none';
+                } else {
+                    alert("❌ Error: " + result.error);
+                }
+            } catch (err) {
+                alert("❌ Error de conexión con el servidor.");
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "INICIAR PROCESO DE ENVÍO";
+            }
+        }
+    </script>
+</body>
+</html>

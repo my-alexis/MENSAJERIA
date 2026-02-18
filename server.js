@@ -11,30 +11,15 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const sessions = new Map();
-const enviandoStatus = new Map(); // Para controlar que un asesor no duplique envíos
+const enviandoStatus = new Map(); 
 const upload = multer({ dest: 'uploads/' });
 
-// --- CONFIGURACIÓN DE SEGURIDAD ---
-const USUARIO_ADMIN = "admin";
-const CLAVE_ADMIN = "Horizons2026"; 
-
+// --- CONFIGURACIÓN ---
 app.use(express.static('public'));
 app.use(express.json());
 
-// Middleware de Autenticación
-const authMiddleware = (req, res, next) => {
-    const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
-    const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
-
-    if (login === USUARIO_ADMIN && password === CLAVE_ADMIN) {
-        return next();
-    }
-    res.set('WWW-Authenticate', 'Basic realm="Acceso New Horizons"');
-    res.status(401).send('No autorizado');
-};
-
-// Rutas protegidas
-app.get('/', authMiddleware, (req, res) => {
+// Acceso directo sin contraseña por ahora
+app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -48,41 +33,35 @@ async function crearSesion(idAsesor, socket = null) {
     
     const sock = makeWASocket({
         auth: state,
-        logger: pino({ level: 'silent' }),
+        logger: pino({ level: 'error' }), // Logs limpios sin buffers
         printQRInTerminal: false,
         browser: ['New Horizons', 'Chrome', '1.0.0']
     });
 
     sessions.set(idAsesor, sock);
-
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
-        
-        if (qr && socket) {
-            socket.emit('qr', { idAsesor, qr });
-        }
+        if (qr && socket) socket.emit('qr', { idAsesor, qr });
         
         if (connection === 'open') {
             if (socket) socket.emit('ready', { idAsesor });
-            console.log(`✅ [SESIÓN] Asesor ${idAsesor} conectado correctamente.`);
+            console.log(`✅ [SESIÓN] Asesor ${idAsesor} conectado.`);
         }
         
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) {
-                console.log(`🔄 [SISTEMA] Reconectando asesor ${idAsesor}...`);
                 crearSesion(idAsesor, socket);
             } else {
-                console.log(`🛑 [SISTEMA] Sesión de ${idAsesor} cerrada permanentemente.`);
+                console.log(`🛑 [SISTEMA] Sesión de ${idAsesor} cerrada.`);
                 sessions.delete(idAsesor);
             }
         }
     });
 }
 
-// Restaurar sesiones al iniciar
 const restaurarSesiones = () => {
     const dir = './sesiones';
     if (fs.existsSync(dir)) {
@@ -97,37 +76,43 @@ const restaurarSesiones = () => {
 
 io.on('connection', (socket) => {
     socket.on('iniciar-instancia', (data) => {
-        console.log(`🚀 [SOCKET] Solicitud de inicio para: ${data.idAsesor}`);
         crearSesion(data.idAsesor, socket);
     });
 });
 
-app.post('/enviar-masivo', authMiddleware, upload.single('archivo'), async (req, res) => {
+app.post('/enviar-masivo', upload.single('archivo'), async (req, res) => {
     const { idAsesor, numeros, mensaje } = req.body;
     const sock = sessions.get(idAsesor);
     
-    if (!sock) return res.status(400).json({ success: false, error: "La sesión no está activa." });
-    if (enviandoStatus.get(idAsesor)) return res.status(400).json({ success: false, error: "Ya hay un envío en curso para este asesor." });
+    if (!sock) return res.status(400).json({ success: false, error: "Sesión no activa." });
+    if (enviandoStatus.get(idAsesor)) return res.status(400).json({ success: false, error: "Envío en curso." });
 
     let numsArray;
     try {
         numsArray = JSON.parse(numeros);
     } catch (e) {
-        return res.status(400).json({ success: false, error: "Formato de lista de números incorrecto." });
+        return res.status(400).json({ success: false, error: "Formato incorrecto." });
     }
 
-    // Responder de inmediato para que la web no cargue infinitamente
     res.json({ success: true, total: numsArray.length });
 
-    // Ejecutar envío en segundo plano
     enviandoStatus.set(idAsesor, true);
-    console.log(`📦 [ENVÍO] Iniciando campaña para ${idAsesor} (${numsArray.length} contactos)`);
+    console.log(`📦 [CAMPANIA] Iniciada: ${numsArray.length} contactos.`);
+
+    let enviados = 0;
+    let fallidos = 0;
+    let contadorLote = 0;
 
     for (const num of numsArray) {
+        // --- REGLA DE NEGOCIO: PAUSA DE 10 MIN CADA 40 ENVÍOS ---
+        if (contadorLote === 40) {
+            console.log(`⏳ [PAUSA] Lote de 40 completado. Esperando 10 minutos...`);
+            await delay(10 * 60 * 1000); // 10 minutos
+            contadorLote = 0;
+        }
+
         try {
             const jid = `${num.trim()}@s.whatsapp.net`;
-            const opciones = {};
-
             if (req.file) {
                 const contenido = fs.readFileSync(req.file.path);
                 const isImage = req.file.mimetype.startsWith('image/');
@@ -140,29 +125,33 @@ app.post('/enviar-masivo', authMiddleware, upload.single('archivo'), async (req,
                 await sock.sendMessage(jid, { text: mensaje });
             }
 
-            console.log(`   📧 Mensaje enviado a ${num}`);
-            // Delay humano aleatorio para evitar baneos
+            enviados++;
+            contadorLote++;
+            console.log(`   📧 [${enviados}/${numsArray.length}] Enviado a ${num}`);
+            
+            // Delay aleatorio entre mensajes (8-12 seg)
             await delay(Math.floor(Math.random() * (12000 - 8000 + 1)) + 8000); 
         } catch (e) {
-            console.error(`   ❌ Error con el número ${num}:`, e.message);
+            fallidos++;
+            console.error(`   ❌ Error con ${num}:`, e.message);
         }
     }
 
-    console.log(`✨ [ENVÍO] Campaña de ${idAsesor} finalizada.`);
+    // --- REPORTE DE PROCESOS ---
+    console.log('-------------------------------------------');
+    console.log(`✨ [REPORTE FINAL]`);
+    console.log(`✅ Exitosos: ${enviados}`);
+    console.log(`❌ Fallidos: ${fallidos}`);
+    console.log('-------------------------------------------');
+    
     enviandoStatus.set(idAsesor, false);
-
-    // Limpieza de archivos
-    if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-    }
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 });
 
-// Iniciar
 server.listen(3000, '0.0.0.0', () => {
     console.log('-------------------------------------------');
-    console.log('🚀 NEW HORIZONS - WHATSAPP SERVER');
-    console.log('📍 Puerto: 3000');
-    console.log('🔑 Usuario:', USUARIO_ADMIN);
+    console.log('🚀 NEW HORIZONS - SERVER READY');
+    console.log('📍 Puerto: 3000 | Seguridad: OFF');
     console.log('-------------------------------------------');
     restaurarSesiones();
 });

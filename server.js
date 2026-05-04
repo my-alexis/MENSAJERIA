@@ -89,6 +89,6 @@ app.post('/enviar-masivo', upload.single('archivo'), async (req, res) => {
 });
 
 
-server.listen(3000, '0.0.0.0', () => {
-    console.log('🚀 SERVIDOR WHATSAPP-WEB.JS CORRIENDO EN PUERTO 3000');
+server.listen(4000, '0.0.0.0', () => {
+    console.log('🚀 SERVIDOR WHATSAPP-WEB.JS CORRIENDO EN PUERTO 4000');
 });
